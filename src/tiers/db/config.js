@@ -18,37 +18,42 @@
  * - The tiers table stores account identity, tier value, and creation timestamp.
  */
 
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
+import { DatabaseSync } from "node:sqlite";
 
-let dbPromise;
+let dbInstance;
 
 export async function openDB() {
-  if (!dbPromise) {
-    dbPromise = open({
-      filename: "./database.db",
-      driver: sqlite3.Database,
-    })
-      .then(async (db) => {
-        await db.exec(`
+  if (!dbInstance) {
+    try {
+      const rawDb = new DatabaseSync("./database.db");
+      rawDb.exec(`
   CREATE TABLE IF NOT EXISTS tiers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_name TEXT NOT NULL,
     account_id TEXT NOT NULL,
     tier TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(account_id, account_name, created_at)
+    
   )
   `);
-        return db;
-      })
-      .catch((err) => {
-        console.error("Error initializing database:", err);
-        dbPromise = undefined;
-        throw err;
-      });
+
+      dbInstance = {
+        exec(sql) {
+          rawDb.exec(sql);
+        },
+        get(sql, ...params) {
+          return rawDb.prepare(sql).get(...params);
+        },
+      };
+    } catch (err) {
+      console.error("Error initializing database:", err);
+      dbInstance = undefined;
+      throw err;
+    }
   }
 
-  return dbPromise;
+  return dbInstance;
 }
 
 export async function initializeDB() {
