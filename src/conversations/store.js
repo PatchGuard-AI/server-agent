@@ -34,7 +34,7 @@ export async function saveConversationSnapshot({
     !repoName ||
     !eventType ||
     !commentAuthor ||
-    prNumber === undefined ||
+    typeof prNumber === "undefined" ||
     prNumber === null
   ) {
     throw new Error("Missing required conversation metadata");
@@ -42,6 +42,10 @@ export async function saveConversationSnapshot({
 
   if (typeof conversation !== "string" || conversation.trim().length === 0) {
     throw new Error("Conversation must be a non-empty string");
+  }
+  const normalizedPrNumber = Number(prNumber);
+  if (!Number.isInteger(normalizedPrNumber) || normalizedPrNumber <= 0) {
+    throw new Error("prNumber must be a positive integer");
   }
 
   const db = await openDB();
@@ -59,7 +63,7 @@ export async function saveConversationSnapshot({
     String(repoOwnerId),
     repoOwnerLogin,
     repoName,
-    Number(prNumber),
+    normalizedPrNumber,
     eventType,
     commentAuthor,
     diffHunk,
