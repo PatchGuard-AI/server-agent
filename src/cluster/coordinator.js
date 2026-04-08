@@ -229,8 +229,11 @@ export class ClusterCoordinator {
    * `OLLAMA_RPC_SERVERS`) so the coordinator's Ollama instance can distribute
    * model layers across the cluster.
    *
-   * Only non-coordinator nodes with a non-zero rpcPort are included; the
-   * coordinator's Ollama is the "head" that talks TO the RPC workers.
+   * Coordinator-role nodes are excluded because the coordinator's Ollama is the
+   * RPC *client* (head node) that sends compute to the workers – it must not
+   * appear in its own `OLLAMA_RPC_SERVERS` list, which would create a loop.
+   * Worker nodes with `rpcPort > 0` are the RPC *servers* that the coordinator
+   * offloads model layers to.
    *
    * @returns {string[]}  e.g. ["192.168.1.2:12434", "192.168.1.3:12434"]
    */

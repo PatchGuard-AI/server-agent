@@ -130,6 +130,9 @@ async function runClusterInference(model, messages, options) {
   // When OLLAMA_MANAGE=true, the local Ollama was (re)started with
   // OLLAMA_RPC_SERVERS listing every registered worker's RPC endpoint, so it
   // automatically shards the model across the cluster's combined VRAM.
+  // When OLLAMA_MANAGE=false, the operator must configure OLLAMA_RPC_SERVERS
+  // on the coordinator's Ollama instance manually before starting it; the
+  // /cluster/rpc-config endpoint returns the correct value to use.
   const rpcServers = coordinator.getRpcServers();
   if (rpcServers.length > 0) {
     console.log(

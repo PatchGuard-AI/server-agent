@@ -118,9 +118,14 @@ export class OllamaManager {
     if (this._restartTimer) {
       clearTimeout(this._restartTimer);
     }
-    this._restartTimer = setTimeout(async () => {
+    this._restartTimer = setTimeout(() => {
       this._restartTimer = null;
-      await this.restart(rpcServers);
+      this.restart(rpcServers).catch((err) => {
+        console.error(
+          "[ollama-manager] Scheduled restart failed:",
+          err.message
+        );
+      });
     }, RESTART_DEBOUNCE_MS);
     console.log(
       `[ollama-manager] Restart scheduled in ${RESTART_DEBOUNCE_MS / 1000} s ` +
