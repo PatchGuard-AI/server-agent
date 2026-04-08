@@ -3,7 +3,7 @@
  *
  * What this file does:
  * - Opens a SQLite database connection for the service.
- * - Ensures the tiers table exists before runtime access.
+ * - Ensures the tiers and conversations tables exist before runtime access.
  *
  * Exports:
  * - openDB(): Opens and returns a database connection.
@@ -16,6 +16,7 @@
  * Important behavior notes:
  * - Initialization errors are logged and rethrown.
  * - The tiers table stores account identity, tier value, and creation timestamp.
+ * - The conversations table stores full webhook conversation snapshots and metadata.
  */
 
 import { DatabaseSync } from "node:sqlite";
@@ -37,6 +38,20 @@ export async function openDB() {
     
   )
   `);
+      rawDb.exec(`
+  CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    repo_owner_id TEXT NOT NULL,
+    repo_owner_login TEXT NOT NULL,
+    repo_name TEXT NOT NULL,
+    pr_number INTEGER NOT NULL,
+    event_type TEXT NOT NULL,
+    comment_author TEXT NOT NULL,
+    diff_hunk TEXT,
+    conversation TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )
+  `);
 
       dbInstance = {
         exec(sql) {
@@ -44,6 +59,9 @@ export async function openDB() {
         },
         get(sql, ...params) {
           return rawDb.prepare(sql).get(...params);
+        },
+        run(sql, ...params) {
+          return rawDb.prepare(sql).run(...params);
         },
       };
     } catch (err) {
