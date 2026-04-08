@@ -33,7 +33,9 @@ export async function saveConversationSnapshot({
     !repoOwnerLogin ||
     !repoName ||
     !eventType ||
-    !commentAuthor
+    !commentAuthor ||
+    prNumber === undefined ||
+    prNumber === null
   ) {
     throw new Error("Missing required conversation metadata");
   }

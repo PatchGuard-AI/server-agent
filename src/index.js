@@ -2,7 +2,7 @@ await import("dotenv/config");
 
 const { default: express } = await import("express");
 const { createNodeMiddleware } = await import("@octokit/webhooks");
-const { webhooks } = await import("./github/webhooks/reciever.js");
+const { webhooks } = await import("./github/webhooks/receiver.js");
 
 const app = express();
 
