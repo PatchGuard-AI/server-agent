@@ -160,10 +160,18 @@ async function udpBroadcastDiscover(clusterPort, timeoutMs) {
 
 /**
  * Scans every host on every local /24 subnet for an open `port`.
- * Runs probes in batches of `concurrency`.
+ * Runs probes in batches of `concurrency` to bound parallelism.
+ *
+ * Performance note: with the default 500 ms probe timeout and concurrency=50,
+ * a single /24 subnet (254 hosts) requires ceil(254/50) = 6 sequential rounds
+ * each up to 500 ms, so the worst-case scan time per subnet is ~3 s.  For each
+ * additional local subnet the time adds linearly.  Most deployments have a
+ * single local subnet, so the total fallback scan completes in under 5 s.
+ * The UDP broadcast path (tried first) typically completes in under 2 s.
+ *
  * @param {number} port
- * @param {number} probeTimeoutMs
- * @param {number} [concurrency=50]
+ * @param {number} probeTimeoutMs  Per-host TCP connection timeout.
+ * @param {number} [concurrency=50]  Max simultaneous probes.
  * @returns {Promise<string[]>}
  */
 async function tcpScanSubnet(port, probeTimeoutMs, concurrency = 50) {

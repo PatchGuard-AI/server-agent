@@ -45,7 +45,7 @@ export function startWsServer(httpServer, coordinator) {
       try {
         msg = JSON.parse(raw.toString());
       } catch {
-        // Silently discard malformed frames
+        console.warn("[cluster] Discarding malformed WS frame from", remoteIp);
         return;
       }
 

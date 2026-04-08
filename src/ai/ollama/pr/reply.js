@@ -89,8 +89,9 @@ function buildMessages(prompt) {
  */
 async function runLocalOllama(client, model, messages, options) {
   const response = await client.chat({ model, messages, options });
-  // The Ollama JS client returns `message.content` on the top-level response,
-  // not nested under `choices[0]`.
+  // The Ollama JS client v0.6+ returns the assistant message directly on
+  // `response.message.content`.  The `choices[0].message.content` path is
+  // kept as a fallback for older client versions or unexpected response shapes.
   const content =
     response.message?.content ?? response.choices?.[0]?.message?.content ?? "";
   return content.trim();
@@ -187,6 +188,9 @@ async function executePrompt(prompt, tier = "free") {
 
   if (fullResponse.includes("SEARCH_GOOGLE:")) {
     const query = fullResponse.split("SEARCH_GOOGLE:")[1].split("\n")[0].trim();
+    if (!query) {
+      throw new Error("Model returned SEARCH_GOOGLE: with no query");
+    }
     const searchResults = await fetchSearchResults(query);
     return executePrompt(
       prompt + "\n\nSEARCH RESULTS:\n" + searchResults,
@@ -196,6 +200,11 @@ async function executePrompt(prompt, tier = "free") {
 
   if (fullResponse.includes("SEARCH_WEBSITE:")) {
     const url = fullResponse.split("SEARCH_WEBSITE:")[1].split("\n")[0].trim();
+    if (!url || (!url.startsWith("http://") && !url.startsWith("https://"))) {
+      throw new Error(
+        "Model returned SEARCH_WEBSITE: with a missing or invalid URL"
+      );
+    }
     const searchResults = await fetchSearchResults(url);
     return executePrompt(
       prompt + "\n\nSEARCH WEBSITE RESULTS:\n" + searchResults,

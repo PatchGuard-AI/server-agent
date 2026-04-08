@@ -203,18 +203,60 @@ export async function initCluster(httpServer) {
   // Start UDP announcer so peers can discover us
   createUdpAnnouncer(clusterPort);
 
-  // Register this node with its own coordinator (self-participation)
-  _coordinator.registerNode(
-    // Local "virtual" socket – the local node doesn't need real WS messages
-    { readyState: WebSocket.OPEN, send: () => {} },
-    {
-      nodeId,
-      role: "coordinator",
-      host: localIp,
-      ollamaPort,
-      gpuMemoryGB,
-    }
-  );
+  // Register this node with its own coordinator (self-participation).
+  // The virtual socket intercepts INFERENCE_REQUEST messages sent to the local
+  // node and fulfils them directly via the local Ollama HTTP API rather than
+  // routing them back over a real WebSocket connection.
+  const localNodeWs = {
+    readyState: WebSocket.OPEN,
+    send: (raw) => {
+      let msg;
+      try {
+        msg = JSON.parse(raw);
+      } catch {
+        return;
+      }
+      if (msg.type === "INFERENCE_REQUEST") {
+        const { requestId, model, messages, options } = msg;
+        fetch(`http://localhost:${ollamaPort}/api/chat`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ model, messages, options, stream: false }),
+        })
+          .then((res) => {
+            if (!res.ok) {
+              throw new Error(`Ollama HTTP ${res.status}`);
+            }
+            return res.json();
+          })
+          .then((data) => {
+            const content = data.message?.content ?? "";
+            _coordinator.handleInferenceResponse({
+              requestId,
+              content,
+              done: true,
+            });
+          })
+          .catch((err) => {
+            _coordinator.handleInferenceResponse({
+              requestId,
+              error: err.message,
+              done: true,
+            });
+          });
+      }
+      // ASSIGN_LAYERS and other coordinator-to-node messages need no action for
+      // the local node as it reads its own state via the coordinator directly.
+    },
+  };
+
+  _coordinator.registerNode(localNodeWs, {
+    nodeId,
+    role: "coordinator",
+    host: localIp,
+    ollamaPort,
+    gpuMemoryGB,
+  });
 
   const coordinatorHost = process.env.COORDINATOR_HOST;
 
