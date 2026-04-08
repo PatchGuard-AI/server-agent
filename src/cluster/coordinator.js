@@ -39,6 +39,7 @@ function getLayerCount(model) {
  *   host:        string,
  *   ollamaPort:  number,
  *   gpuMemoryGB: number,
+ *   rpcPort:     number,
  *   ws:          import('ws').WebSocket,
  *   lastSeen:    number,
  *   layerStart:  number|null,
@@ -50,13 +51,22 @@ function getLayerCount(model) {
  */
 
 export class ClusterCoordinator {
-  constructor() {
+  /**
+   * @param {object} [opts]
+   * @param {import('./ollama-manager.js').OllamaManager|null} [opts.ollamaManager]
+   *   When provided, the coordinator will call `scheduleRestart` on it whenever
+   *   the set of registered RPC workers changes so that Ollama's
+   *   `OLLAMA_RPC_SERVERS` is kept in sync with the live cluster topology.
+   */
+  constructor({ ollamaManager = null } = {}) {
     /** @type {Map<string, NodeRecord>} nodeId → record */
     this._nodes = new Map();
     /** @type {Map<import('ws').WebSocket, string>} ws → nodeId */
     this._wsToId = new Map();
     /** @type {Map<string, PendingRequest>} requestId → pending */
     this._pending = new Map();
+    /** @type {import('./ollama-manager.js').OllamaManager|null} */
+    this._ollamaManager = ollamaManager;
 
     // Prune nodes that have not sent a heartbeat in 30 s
     this._pruneTimer = setInterval(() => this._pruneStaleNodes(), 15_000);
@@ -76,6 +86,7 @@ export class ClusterCoordinator {
       host,
       ollamaPort = 11434,
       gpuMemoryGB = 8,
+      rpcPort = 0,
     } = msg;
 
     if (!nodeId) {
@@ -89,6 +100,7 @@ export class ClusterCoordinator {
       host,
       ollamaPort: Number(ollamaPort),
       gpuMemoryGB: Number(gpuMemoryGB),
+      rpcPort: Number(rpcPort),
       ws,
       lastSeen: Date.now(),
       layerStart: null,
@@ -100,13 +112,17 @@ export class ClusterCoordinator {
     this._wsToId.set(ws, nodeId);
 
     console.log(
-      `[coordinator] Node registered: ${nodeId}  host=${host}  gpu=${gpuMemoryGB} GB`
+      `[coordinator] Node registered: ${nodeId}  host=${host}  gpu=${gpuMemoryGB} GB` +
+        (record.rpcPort ? `  rpcPort=${record.rpcPort}` : "")
     );
 
     wsSend(ws, { type: "REGISTERED", nodeId, role });
 
     // Re-distribute layers now that the pool has changed
     this._assignLayers();
+
+    // Notify the OllamaManager so it can restart with the updated RPC server list
+    this._notifyOllamaManager();
   }
 
   /**
@@ -122,6 +138,7 @@ export class ClusterCoordinator {
     this._nodes.delete(nodeId);
     console.log(`[coordinator] Node disconnected: ${nodeId}`);
     this._assignLayers();
+    this._notifyOllamaManager();
   }
 
   /** @param {string} nodeId */
@@ -207,6 +224,23 @@ export class ClusterCoordinator {
   }
 
   /**
+   * Returns `host:rpcPort` strings for every node that has an RPC port
+   * configured.  These are passed to the OllamaManager (and indirectly to
+   * `OLLAMA_RPC_SERVERS`) so the coordinator's Ollama instance can distribute
+   * model layers across the cluster.
+   *
+   * Only non-coordinator nodes with a non-zero rpcPort are included; the
+   * coordinator's Ollama is the "head" that talks TO the RPC workers.
+   *
+   * @returns {string[]}  e.g. ["192.168.1.2:12434", "192.168.1.3:12434"]
+   */
+  getRpcServers() {
+    return [...this._nodes.values()]
+      .filter((n) => n.role !== "coordinator" && n.rpcPort > 0)
+      .map((n) => `${n.host}:${n.rpcPort}`);
+  }
+
+  /**
    * Dispatches a chat-inference request to the first registered node and
    * waits for its INFERENCE_RESPONSE.
    *
@@ -279,6 +313,7 @@ export class ClusterCoordinator {
         this._nodes.delete(id);
         this._wsToId.delete(node.ws);
         this._assignLayers();
+        this._notifyOllamaManager();
       }
     }
   }
@@ -286,10 +321,11 @@ export class ClusterCoordinator {
   /** Returns a plain-object summary of the current cluster state. */
   getState() {
     return [...this._nodes.values()].map(
-      ({ nodeId, host, gpuMemoryGB, layerStart, layerEnd, role }) => ({
+      ({ nodeId, host, gpuMemoryGB, rpcPort, layerStart, layerEnd, role }) => ({
         nodeId,
         host,
         gpuMemoryGB,
+        rpcPort,
         layerStart,
         layerEnd,
         role,
@@ -300,5 +336,19 @@ export class ClusterCoordinator {
   /** Cleans up the internal prune timer (useful in tests). */
   destroy() {
     clearInterval(this._pruneTimer);
+  }
+
+  // ── Private helpers ───────────────────────────────────────────────────────────
+
+  /**
+   * Notifies the OllamaManager (if one is configured) to schedule a restart
+   * with the current set of RPC worker endpoints.
+   */
+  _notifyOllamaManager() {
+    if (!this._ollamaManager) {
+      return;
+    }
+    const rpcServers = this.getRpcServers();
+    this._ollamaManager.scheduleRestart(rpcServers);
   }
 }

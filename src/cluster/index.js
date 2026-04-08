@@ -29,6 +29,7 @@ import { randomUUID } from "crypto";
 import { WebSocket } from "ws";
 
 import { ClusterCoordinator } from "./coordinator.js";
+import { OllamaManager } from "./ollama-manager.js";
 import { startWsServer, wsSend } from "./ws-server.js";
 import {
   discoverNodes,
@@ -38,10 +39,17 @@ import {
 
 /** @type {ClusterCoordinator|null} */
 let _coordinator = null;
+/** @type {OllamaManager|null} */
+let _ollamaManager = null;
 
 /** @returns {ClusterCoordinator|null} */
 export function getCoordinator() {
   return _coordinator;
+}
+
+/** @returns {OllamaManager|null} */
+export function getOllamaManager() {
+  return _ollamaManager;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -98,8 +106,9 @@ async function handleWorkerInference(ws, msg, ollamaPort) {
  * @param {string} nodeId        This node's unique identifier.
  * @param {number} ollamaPort    Local Ollama port.
  * @param {number} gpuMemoryGB   GPU memory this node contributes.
+ * @param {number} rpcPort       RPC port this node exposes (0 = none).
  */
-function connectToPeer(wsUrl, nodeId, ollamaPort, gpuMemoryGB) {
+function connectToPeer(wsUrl, nodeId, ollamaPort, gpuMemoryGB, rpcPort) {
   let ws;
   let heartbeatTimer;
 
@@ -115,6 +124,7 @@ function connectToPeer(wsUrl, nodeId, ollamaPort, gpuMemoryGB) {
         host: getLocalIp(),
         ollamaPort,
         gpuMemoryGB,
+        rpcPort,
       });
 
       // Send periodic heartbeats so the coordinator knows we are alive
@@ -188,16 +198,36 @@ export async function initCluster(httpServer) {
   const clusterPort = Number(process.env.CLUSTER_PORT ?? 3001);
   const ollamaPort = Number(process.env.NODE_OLLAMA_PORT ?? 11434);
   const gpuMemoryGB = Number(process.env.NODE_GPU_MEMORY_GB ?? 8);
+  const rpcPort = Number(process.env.NODE_OLLAMA_RPC_PORT ?? 0);
+  const manageOllama = process.env.OLLAMA_MANAGE === "true";
+  const ollamaBin = process.env.OLLAMA_BIN ?? "ollama";
   const nodeId = randomUUID();
   const localIp = getLocalIp();
 
   console.log(
     `[cluster] Initialising node  id=${nodeId}  ip=${localIp}  ` +
-      `gpu=${gpuMemoryGB} GB  ollamaPort=${ollamaPort}`
+      `gpu=${gpuMemoryGB} GB  ollamaPort=${ollamaPort}` +
+      (rpcPort ? `  rpcPort=${rpcPort}` : "")
   );
 
+  // Optionally manage the local Ollama subprocess so that OLLAMA_RPC_SERVERS
+  // is kept in sync with the live cluster topology.  This is required for true
+  // distributed inference of large models (e.g. qwen3-coder:480b) that exceed
+  // the VRAM of a single node.
+  if (manageOllama) {
+    _ollamaManager = new OllamaManager({ ollamaPort, rpcPort, ollamaBin });
+    // Start with no RPC workers; the list will grow as workers register.
+    _ollamaManager.start([]);
+  } else if (rpcPort > 0) {
+    console.log(
+      `[cluster] NODE_OLLAMA_RPC_PORT=${rpcPort} is set but OLLAMA_MANAGE is not enabled. ` +
+        "Start Ollama manually with OLLAMA_RPC_PORT set, or set OLLAMA_MANAGE=true to let " +
+        "the agent manage the Ollama process automatically."
+    );
+  }
+
   // Start coordinator and WebSocket server
-  _coordinator = new ClusterCoordinator();
+  _coordinator = new ClusterCoordinator({ ollamaManager: _ollamaManager });
   const wss = startWsServer(httpServer, _coordinator);
 
   // Start UDP announcer so peers can discover us
@@ -256,6 +286,7 @@ export async function initCluster(httpServer) {
     host: localIp,
     ollamaPort,
     gpuMemoryGB,
+    rpcPort,
   });
 
   const coordinatorHost = process.env.COORDINATOR_HOST;
@@ -266,7 +297,7 @@ export async function initCluster(httpServer) {
       ? coordinatorHost
       : `ws://${coordinatorHost}:${clusterPort}`;
     console.log(`[cluster] Connecting to configured coordinator: ${wsUrl}`);
-    connectToPeer(wsUrl, nodeId, ollamaPort, gpuMemoryGB);
+    connectToPeer(wsUrl, nodeId, ollamaPort, gpuMemoryGB, rpcPort);
   } else {
     // Auto-discover peers on the local network
     console.log("[cluster] Scanning local network for peer nodes…");
@@ -280,7 +311,7 @@ export async function initCluster(httpServer) {
         );
         for (const peer of peers) {
           const wsUrl = `ws://${peer.host}:${peer.clusterPort}`;
-          connectToPeer(wsUrl, nodeId, ollamaPort, gpuMemoryGB);
+          connectToPeer(wsUrl, nodeId, ollamaPort, gpuMemoryGB, rpcPort);
         }
       } else {
         console.log(
