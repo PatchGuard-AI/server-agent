@@ -25,6 +25,8 @@ import { executePrompt } from "../../ai/ollama/pr/reply.js";
 import { saveConversationSnapshot } from "../../conversations/store.js";
 import { getAllPRComments, buildConversation } from "./conversation.js";
 
+const DEFAULT_TIER = "free";
+
 // Handler for general PR comments
 webhooks.on("issue_comment", async ({ payload }) => {
   if (!payload.issue.pull_request) {
@@ -53,7 +55,7 @@ webhooks.on("issue_comment", async ({ payload }) => {
 
   const repoOwnerId = payload.repository.owner.id;
   const tier = await getTierForAccount(repoOwnerId, owner);
-  const resolvedTier = tier ?? "free";
+  const resolvedTier = tier ?? DEFAULT_TIER;
 
   // Fetch all comments and build conversation
   const allComments = await getAllPRComments(octokit, owner, repo, prNumber);
@@ -105,7 +107,7 @@ webhooks.on("pull_request_review_comment", async ({ payload }) => {
   console.log(`Comment NOT from the bot: ${commentAuthor}`);
 
   const tier = await getTierForAccount(repoOwnerId, repoOwnerLogin);
-  const resolvedTier = tier ?? "free";
+  const resolvedTier = tier ?? DEFAULT_TIER;
 
   // Fetch all comments and build conversation
   const allComments = await getAllPRComments(
