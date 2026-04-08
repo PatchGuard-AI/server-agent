@@ -22,33 +22,10 @@
 import { webhooks, octokit } from "./config.js";
 import { getTierForAccount } from "../../tiers/fetcher.js";
 import { executePrompt } from "../../ai/ollama/pr/reply.js";
+import { saveConversationSnapshot } from "../../conversations/store.js";
+import { getAllPRComments, buildConversation } from "./conversation.js";
 
-// Helper: get all comments (conversation + inline review) for a PR
-async function getAllPRComments(owner, repo, prNumber) {
-  const { data: issueComments } = await octokit.rest.issues.listComments({
-    owner,
-    repo,
-    issue_number: prNumber,
-  });
-
-  const { data: reviewComments } = await octokit.rest.pulls.listReviewComments({
-    owner,
-    repo,
-    pull_number: prNumber,
-  });
-
-  // Combine and sort by creation time
-  const allComments = [...issueComments, ...reviewComments].sort(
-    (a, b) => new Date(a.created_at) - new Date(b.created_at)
-  );
-
-  return allComments;
-}
-
-// Function to build conversation text from comments
-function buildConversation(comments) {
-  return comments.map((c) => `${c.user.login}: ${c.body}`).join("\n");
-}
+const DEFAULT_TIER = "free";
 
 // Handler for general PR comments
 webhooks.on("issue_comment", async ({ payload }) => {
@@ -78,15 +55,27 @@ webhooks.on("issue_comment", async ({ payload }) => {
 
   const repoOwnerId = payload.repository.owner.id;
   const tier = await getTierForAccount(repoOwnerId, owner);
+  const resolvedTier = tier ?? DEFAULT_TIER;
 
   // Fetch all comments and build conversation
-  const allComments = await getAllPRComments(owner, repo, prNumber);
+  const allComments = await getAllPRComments(octokit, owner, repo, prNumber);
   const conversation = buildConversation(allComments);
+  await saveConversationSnapshot({
+    repoOwnerId,
+    repoOwnerLogin: owner,
+    repoName: repo,
+    prNumber,
+    eventType: "issue_comment",
+    commentAuthor,
+    conversation,
+  });
 
   // Execute AI prompt using full conversation + tier
-  const response = await executePrompt(conversation, tier);
+  const response = await executePrompt(conversation, resolvedTier);
 
-  console.log(`AI response for PR #${prNumber} (tier: ${tier}): ${response}`);
+  console.log(
+    `AI response for PR #${prNumber} (tier: ${resolvedTier}): ${response}`
+  );
 });
 
 // Handler for inline review comments
@@ -118,10 +107,26 @@ webhooks.on("pull_request_review_comment", async ({ payload }) => {
   console.log(`Comment NOT from the bot: ${commentAuthor}`);
 
   const tier = await getTierForAccount(repoOwnerId, repoOwnerLogin);
+  const resolvedTier = tier ?? DEFAULT_TIER;
 
   // Fetch all comments and build conversation
-  const allComments = await getAllPRComments(repoOwnerLogin, repo, prNumber);
+  const allComments = await getAllPRComments(
+    octokit,
+    repoOwnerLogin,
+    repo,
+    prNumber
+  );
   const conversation = buildConversation(allComments);
+  await saveConversationSnapshot({
+    repoOwnerId,
+    repoOwnerLogin,
+    repoName: repo,
+    prNumber,
+    eventType: "pull_request_review_comment",
+    commentAuthor,
+    diffHunk,
+    conversation,
+  });
 
   // Execute AI prompt using full conversation + tier
   const response = await executePrompt(
@@ -129,10 +134,12 @@ webhooks.on("pull_request_review_comment", async ({ payload }) => {
       diffHunk +
       " This is the conversation: " +
       conversation,
-    tier
+    resolvedTier
   );
 
-  console.log(`AI response for PR #${prNumber} (tier: ${tier}): ${response}`);
+  console.log(
+    `AI response for PR #${prNumber} (tier: ${resolvedTier}): ${response}`
+  );
 });
 
 export { webhooks };
