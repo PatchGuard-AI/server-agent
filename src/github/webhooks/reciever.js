@@ -39,7 +39,7 @@ async function getAllPRComments(owner, repo, prNumber) {
 
   // Combine and sort by creation time
   const allComments = [...issueComments, ...reviewComments].sort(
-    (a, b) => new Date(a.created_at) - new Date(b.created_at),
+    (a, b) => new Date(a.created_at) - new Date(b.created_at)
   );
 
   return allComments;
@@ -103,7 +103,7 @@ webhooks.on("pull_request_review_comment", async ({ payload }) => {
 
   if (prOwner !== process.env.BOT_NAME) {
     console.log(
-      `Inline comment on PR #${prNumber} NOT from the bot. PR owner: ${prOwner}`,
+      `Inline comment on PR #${prNumber} NOT from the bot. PR owner: ${prOwner}`
     );
     return;
   }
@@ -129,7 +129,7 @@ webhooks.on("pull_request_review_comment", async ({ payload }) => {
       diffHunk +
       " This is the conversation: " +
       conversation,
-    tier,
+    tier
   );
 
   console.log(`AI response for PR #${prNumber} (tier: ${tier}): ${response}`);

@@ -7,7 +7,10 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "test": "echo \"No tests yet\"",
-    "lint": "npx prettier --check . || npx prettier --write \"./**/*.{js,ts,json,css,md}\" && npx eslint . --fix"
+    "format": "pnpm exec prettier --write \"./**/*.{js,ts,json,css,md}\"",
+    "format:check": "pnpm exec prettier --check \"./**/*.{js,ts,json,css,md}\"",
+    "lint": "pnpm exec eslint . --fix && pnpm run format && pnpm run format:check && pnpm run lint:check && pnpm run format",
+    "lint:check": "pnpm exec eslint . && pnpm run format:check"
   },
   "author": "PatchGuard Team",
   "license": "GNU General Public License v3.0",
@@ -16,10 +19,10 @@
     "@octokit/auth-app": "^8.2.0",
     "@octokit/rest": "^22.0.1",
     "@octokit/webhooks": "^14.2.0",
-    "axios": "^0.27.2",
+    "axios": "^1.14.0",
     "dotenv": "^16.6.1",
     "express": "^4.22.1",
-    "nodemon": "^2.0.22",
+    "nodemon": "^3.1.14",
     "octokit": "^5.0.5",
     "ollama": "^0.6.3",
     "sqlite3": "^6.0.1"

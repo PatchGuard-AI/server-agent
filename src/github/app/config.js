@@ -26,7 +26,7 @@ const PRIVATE_KEY = process.env.GITHUB_APP_PRIVATE_KEY;
 
 if (!APP_ID || !INSTALLATION_ID || !PRIVATE_KEY) {
   throw new Error(
-    "Missing required GitHub App env vars: GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, GITHUB_APP_PRIVATE_KEY",
+    "Missing required GitHub App env vars: GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, GITHUB_APP_PRIVATE_KEY"
   );
 }
 

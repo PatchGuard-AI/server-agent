@@ -23,7 +23,7 @@ export async function fetchSearchResults(query) {
     return content;
   } else {
     const response = await fetch(
-      `https://searx.party/search?q=${encodeURIComponent(query)}&format=json`,
+      `https://searx.party/search?q=${encodeURIComponent(query)}&format=json`
     );
     if (!response.ok) {
       throw new Error(`Search request failed with status ${response.status}`);

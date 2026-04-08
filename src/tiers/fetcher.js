@@ -24,7 +24,7 @@ export async function getTierForAccount(accountId, accountName) {
   const row = await db.get(
     "SELECT tier FROM tiers WHERE account_id = ? AND tier IS NOT NULL AND account_name = ? ORDER BY created_at DESC LIMIT 1",
     accountId,
-    accountName,
+    accountName
   );
   return row ? row.tier : null;
 }

@@ -113,7 +113,7 @@ async function executePrompt(prompt, tier = "free") {
     const searchResults = await fetchSearchResults(url);
     await executePrompt(
       prompt + "\n\nSEARCH WEBSITE RESULTS:\n" + searchResults,
-      tier,
+      tier
     );
   }
 

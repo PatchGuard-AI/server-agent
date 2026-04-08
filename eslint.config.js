@@ -33,7 +33,7 @@ export default [
       semi: ["error", "always"],
       quotes: ["error", "double"],
       indent: ["error", 2],
-      "comma-dangle": ["error", "always-multiline"],
+      "comma-dangle": ["error", "only-multiline"],
 
       // ES6+
       "arrow-body-style": ["error", "as-needed"],
