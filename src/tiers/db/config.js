@@ -21,25 +21,16 @@
 import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 
+let dbPromise;
+
 export async function openDB() {
-  initializeDB().catch((err) => {
-    console.error("Error initializing database:", err);
-    throw err;
-  });
-  return (
-    open({
+  if (!dbPromise) {
+    dbPromise = open({
       filename: "./database.db",
       driver: sqlite3.Database,
-    }) ||
-    (async () => {
-      throw new Error("Failed to open database connection");
-    })()
-  );
-}
-
-export async function initializeDB() {
-  const db = await openDB();
-  await db.exec(`
+    })
+      .then(async (db) => {
+        await db.exec(`
   CREATE TABLE IF NOT EXISTS tiers (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     account_name TEXT NOT NULL,
@@ -48,5 +39,18 @@ export async function initializeDB() {
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
   )
   `);
-  return db;
+        return db;
+      })
+      .catch((err) => {
+        console.error("Error initializing database:", err);
+        dbPromise = undefined;
+        throw err;
+      });
+  }
+
+  return dbPromise;
+}
+
+export async function initializeDB() {
+  return openDB();
 }

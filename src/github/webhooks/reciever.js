@@ -19,9 +19,9 @@
  * - Conversation context is ordered by creation timestamp before prompting.
  */
 
-import { webhooks, octokit } from "./config";
-import { getTierForAccount } from "../tiers/fetcher.js";
-import { executePrompt } from "../ai/ollama/pr/reply.js";
+import { webhooks, octokit } from "./config.js";
+import { getTierForAccount } from "../../tiers/fetcher.js";
+import { executePrompt } from "../../ai/ollama/pr/reply.js";
 
 // Helper: get all comments (conversation + inline review) for a PR
 async function getAllPRComments(owner, repo, prNumber) {
@@ -134,3 +134,5 @@ webhooks.on("pull_request_review_comment", async ({ payload }) => {
 
   console.log(`AI response for PR #${prNumber} (tier: ${tier}): ${response}`);
 });
+
+export { webhooks };

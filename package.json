@@ -12,15 +12,21 @@
   "author": "PatchGuard Team",
   "license": "GNU General Public License v3.0",
   "dependencies": {
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "^8.57.1",
+    "@octokit/auth-app": "^8.2.0",
+    "@octokit/rest": "^22.0.1",
+    "@octokit/webhooks": "^14.2.0",
     "axios": "^0.27.2",
-    "dotenv": "^16.0.3",
-    "express": "^4.18.2",
-    "nodemon": "^2.0.20"
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "nodemon": "^2.0.22",
+    "octokit": "^5.0.5",
+    "ollama": "^0.6.3",
+    "sqlite3": "^6.0.1"
   },
   "devDependencies": {
-    "eslint": "^8.34.0",
-    "prettier": "^2.8.4"
+    "eslint": "^8.57.1",
+    "prettier": "^2.8.8"
   },
   "type": "module"
 }
