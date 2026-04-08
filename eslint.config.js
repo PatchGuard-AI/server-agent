@@ -14,6 +14,11 @@ export default [
         module: "readonly",
         fetch: "readonly",
         require: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+        Buffer: "readonly",
       },
     },
 

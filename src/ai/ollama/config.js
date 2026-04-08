@@ -2,16 +2,20 @@
  * Central Ollama configuration for AI execution.
  *
  * What this file does:
- * - Creates and exports a shared Ollama client instance.
+ * - Creates and exports a shared Ollama client instance (used for single-node
+ *   or local-fallback inference).
  * - Defines tier-specific model and generation settings used by execution flows.
+ * - Exports a factory that returns an Ollama client pointed at a specific host,
+ *   allowing the cluster layer to route requests to individual worker nodes.
  *
  * Exports:
- * - ollama: Shared Ollama client used across AI modules.
- * - OLLAMA_TIER_CONFIG: Tier-to-model settings map.
+ * - ollama:              Shared Ollama client (points to local Ollama instance).
+ * - ollamaForHost(url):  Returns an Ollama client configured for the given URL.
+ * - OLLAMA_TIER_CONFIG:  Tier-to-model settings map.
  *
  * Configuration and environment:
- * - Requires Ollama runtime availability where this service executes.
- * - No direct environment variables are read in this module.
+ * - NODE_OLLAMA_PORT: local Ollama HTTP port. Default: 11434.
+ * - No other environment variables are read in this module.
  *
  * Important behavior notes:
  * - maxTokens is consumed by callers and mapped to Ollama num_predict.
@@ -20,8 +24,21 @@
 
 import { Ollama } from "ollama";
 
-// Single Ollama client instance shared across AI execution calls.
-const ollama = new Ollama();
+// Single Ollama client instance for local / single-node access.
+const ollama = new Ollama({
+  host: `http://localhost:${process.env.NODE_OLLAMA_PORT ?? 11434}`,
+});
+
+/**
+ * Returns an Ollama client configured to call the given base URL.
+ * Used by the distributed inference layer to target specific worker nodes.
+ *
+ * @param {string} hostUrl  e.g. "http://192.168.1.5:11434"
+ * @returns {Ollama}
+ */
+function ollamaForHost(hostUrl) {
+  return new Ollama({ host: hostUrl });
+}
 
 const OLLAMA_TIER_CONFIG = {
   free: {
@@ -41,4 +58,4 @@ const OLLAMA_TIER_CONFIG = {
   },
 };
 
-export { ollama, OLLAMA_TIER_CONFIG };
+export { ollama, ollamaForHost, OLLAMA_TIER_CONFIG };
