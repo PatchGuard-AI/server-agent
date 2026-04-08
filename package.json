@@ -1,0 +1,26 @@
+{
+  "name": "@patchguard/agent",
+  "version": "0.1.0",
+  "description": "A server agent that can execute tasks, generate code, and interact with APIs.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "echo \"No tests yet\"",
+    "lint": "npx prettier --check . || npx prettier --write \"./**/*.{js,ts,json,css,md}\" && npx eslint . --fix"
+  },
+  "author": "PatchGuard Team",
+  "license": "GNU General Public License v3.0",
+  "dependencies": {
+    "@eslint/js": "^10.0.1",
+    "axios": "^0.27.2",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "nodemon": "^2.0.20"
+  },
+  "devDependencies": {
+    "eslint": "^8.34.0",
+    "prettier": "^2.8.4"
+  },
+  "type": "module"
+}
