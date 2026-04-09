@@ -1,3 +1,31 @@
+/**
+ * Server Agent – application entry point.
+ *
+ * What this file does:
+ * - Loads environment variables from `.env` via dotenv.
+ * - Creates an Express application and attaches JSON body parsing middleware.
+ * - Mounts the GitHub webhook handler at POST /github/webhook using
+ *   `@octokit/webhooks` node middleware for signature-verified event dispatch.
+ * - Initialises the distributed cluster layer (WebSocket server, node
+ *   discovery, coordinator) and attaches it to the shared HTTP server.
+ * - Exposes two cluster management REST endpoints:
+ *     GET /cluster/status     – returns registered nodes and their layer ranges.
+ *     GET /cluster/rpc-config – returns the OLLAMA_RPC_SERVERS value the
+ *                               coordinator Ollama should be started with.
+ * - Starts the HTTP server on port 3000.
+ *
+ * Environment variables consumed (via downstream modules):
+ * - GITHUB_APP_ID, GITHUB_APP_INSTALLATION_ID, GITHUB_APP_PRIVATE_KEY
+ * - GITHUB_WEBHOOK_SECRET
+ * - CLUSTER_PORT, NODE_GPU_MEMORY_GB, NODE_OLLAMA_PORT, COORDINATOR_HOST
+ * - OLLAMA_MANAGE, OLLAMA_BIN, NODE_OLLAMA_RPC_PORT
+ *
+ * Important behavior notes:
+ * - Uses top-level await (Node ESM `"type": "module"`); Node ≥ 16 required.
+ * - The HTTP server is created before `initCluster` so the WebSocket server
+ *   can be attached to the same port as the REST API.
+ */
+
 await import("dotenv/config");
 
 const { default: express } = await import("express");

@@ -1,3 +1,21 @@
+/**
+ * ESLint configuration for the server-agent project.
+ *
+ * What this file does:
+ * - Applies the recommended ESLint rule set to all JavaScript source files.
+ * - Overrides specific rules to enforce project conventions:
+ *     indent: 2 spaces, quotes: double, semi: required, no-var, prefer-const.
+ * - Declares global variables available in the Node.js / browser-fetch runtime
+ *   (console, process, fetch, setTimeout, etc.) to suppress no-undef errors.
+ * - Applies CommonJS source-type to `.cjs` files only.
+ * - Excludes generated and dependency directories (node_modules, dist, build).
+ *
+ * Important behavior notes:
+ * - This file is consumed by `eslint` and `pnpm run lint` / `pnpm run lint:check`.
+ * - Changing indent or quote rules here will cause formatting mismatches with
+ *   the Prettier configuration; keep both tools aligned.
+ */
+
 import js from "@eslint/js";
 
 export default [
