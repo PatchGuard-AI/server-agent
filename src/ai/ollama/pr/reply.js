@@ -98,9 +98,18 @@ async function runLocalOllama(client, model, messages, options) {
 }
 
 /**
- * Dispatches inference through the cluster coordinator.
- * Each registered node receives an INFERENCE_REQUEST and the first to respond
- * wins (round-robin / first-available semantics).
+ * Dispatches inference through the cluster.
+ *
+ * When multiple nodes are registered the coordinator's Ollama instance is
+ * expected to have been started (or restarted) with `OLLAMA_RPC_SERVERS`
+ * pointing at every worker's RPC port.  Ollama then distributes the model
+ * layers across all available GPUs automatically – for example, running
+ * qwen3-coder:480b (~240 GB at Q4) across 50 nodes × 8 GB = 400 GB of VRAM.
+ *
+ * With OLLAMA_MANAGE=true the agent manages the Ollama subprocess and handles
+ * OLLAMA_RPC_SERVERS updates transparently whenever the cluster topology
+ * changes.  Without it, the operator must configure OLLAMA_RPC_SERVERS on the
+ * coordinator node's Ollama instance manually.
  *
  * @param {string} model
  * @param {Array}  messages
@@ -113,25 +122,42 @@ async function runClusterInference(model, messages, options) {
   // If the coordinator has no remote peers, fall through to local Ollama.
   const pipelineUrls = coordinator.getPipelineUrls();
   if (pipelineUrls.length <= 1) {
-    // Single node (this machine only) – use local client directly to avoid
-    // the WebSocket round-trip overhead.
+    // Single node (this machine only) – use local client directly.
     return runLocalOllama(ollama, model, messages, options);
   }
 
-  console.log(
-    `[cluster] Dispatching inference across ${
-      pipelineUrls.length
-    } node(s): ${pipelineUrls.join(", ")}`
-  );
+  // Multi-node: route inference through the coordinator's local Ollama.
+  // When OLLAMA_MANAGE=true, the local Ollama was (re)started with
+  // OLLAMA_RPC_SERVERS listing every registered worker's RPC endpoint, so it
+  // automatically shards the model across the cluster's combined VRAM.
+  // When OLLAMA_MANAGE=false, the operator must configure OLLAMA_RPC_SERVERS
+  // on the coordinator's Ollama instance manually before starting it; the
+  // /cluster/rpc-config endpoint returns the correct value to use.
+  const rpcServers = coordinator.getRpcServers();
+  if (rpcServers.length > 0) {
+    console.log(
+      "[cluster] Routing inference through coordinator Ollama " +
+        `(${pipelineUrls.length} node(s), ${rpcServers.length} RPC worker(s): ` +
+        `${rpcServers.join(", ")})`
+    );
+  } else {
+    console.warn(
+      `[cluster] ${pipelineUrls.length} node(s) registered but none have an RPC port. ` +
+        "Set NODE_OLLAMA_RPC_PORT on each worker and OLLAMA_MANAGE=true on the coordinator " +
+        "to enable distributed model loading."
+    );
+  }
 
   try {
-    return await coordinator.dispatchInference({ model, messages, options });
+    return await runLocalOllama(ollama, model, messages, options);
   } catch (err) {
     console.error(
-      "[cluster] Distributed inference failed, falling back to local:",
+      "[cluster] Distributed inference failed. If the model is too large for the " +
+        "cluster, ensure all worker nodes have NODE_OLLAMA_RPC_PORT set and the " +
+        "coordinator has OLLAMA_MANAGE=true (or OLLAMA_RPC_SERVERS configured manually).",
       err.message
     );
-    return runLocalOllama(ollama, model, messages, options);
+    throw err;
   }
 }
 
