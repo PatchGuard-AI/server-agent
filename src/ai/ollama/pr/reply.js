@@ -1,19 +1,32 @@
 /**
- * This module is responsible for AI-powered execution using Ollama as the model backend.
+ * AI prompt execution layer for pull-request reply workflows.
  *
- * In plain terms, this file is where incoming prompts are turned into useful AI behavior:
- * - It can reply to a normal user message in a conversational way.
- * - It can also handle task-oriented prompts where the AI is expected to perform or guide
- *   a concrete action instead of just chatting.
+ * What this file does:
+ * - Accepts a plain-text prompt and a service tier, then runs inference against
+ *   the appropriate Ollama model and returns the generated text.
+ * - Routes inference through the cluster coordinator when multiple nodes are
+ *   registered, falling back to the local Ollama instance when running
+ *   single-node.
+ * - Implements a two-pass search-augmentation loop: if the model responds with
+ *   a SEARCH_GOOGLE or SEARCH_WEBSITE directive the result is fetched and the
+ *   prompt is re-executed with the retrieved content appended.
  *
- * Inference routing:
- * - When a cluster is available (multiple nodes discovered at startup), inference is
- *   dispatched through the coordinator, which splits the work across cluster nodes via
- *   WebSocket and routes the request to the appropriate Ollama instance.
- * - When no cluster peers are present the request falls back to the local Ollama instance.
+ * Exports:
+ * - executePrompt(prompt, tier): Runs inference and returns the AI response.
+ * - ollama:                      Re-export of the shared local Ollama client.
+ * - ollamaForHost(url):          Re-export of the per-host Ollama client factory.
  *
- * If you are maintaining this file, think of it as the central execution point for
- * "ask AI to respond" and "ask AI to do work" flows.
+ * Configuration and environment:
+ * - NODE_OLLAMA_PORT: local Ollama HTTP port. Default: 11434 (via config.js).
+ * - OLLAMA_MANAGE: when "true", the cluster manages the Ollama subprocess.
+ *
+ * Important behavior notes:
+ * - Throws when the prompt is empty, the tier is unknown, or the model returns
+ *   an empty response.
+ * - Cluster routing relies on getCoordinator() from the cluster bootstrap; if
+ *   no coordinator is initialised the local Ollama client is used directly.
+ * - The system prompt instructs the model to emit exactly one SEARCH_ directive
+ *   per turn and nothing else; the loop depth is bounded by call-stack limits.
  */
 
 import { ollama, ollamaForHost, OLLAMA_TIER_CONFIG } from "../config.js";
